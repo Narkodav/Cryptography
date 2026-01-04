@@ -132,9 +132,15 @@
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Concepts.h" />
-    <ClInclude Include="CrossCompilerMacros.h" />
-    <ClInclude Include="Hashing\SHA2Base.h" />
+    <ClInclude Include="include\Concepts.h" />
+    <ClInclude Include="include\CrossCompilerMacros.h" />
+    <ClInclude Include="include\Hashing\Base.h" />
+    <ClInclude Include="include\Hashing\MD5.h" />
+    <ClInclude Include="include\Hashing\SHA1.h" />
+    <ClInclude Include="include\Hashing\SHA2.h" />
+    <ClInclude Include="include\Hashing\SHA3.h" />
+    <ClInclude Include="include\Hashing\Utility.h" />
+    <ClInclude Include="include\Hashing\StreamHash.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -1,257 +1,21 @@
 #pragma once
-#include <iostream>
-#include <iomanip>
-#include <sstream>
-#include <string>
-#include <cstring>
-#include <cstdint>
-#include <array>
-#include <span>
+#include "Base.h"
 
-#include "../CrossCompilerMacros.h"
-#include "../Concepts.h"
+namespace Cryptography::Hash {
 
-namespace Cryptography {
-
-    namespace Detail {
-        template<typename T>
-        static T rotateRight(T x, T n) {
-            return (x >> n) | (x << (sizeof(T) * 8 - n));
-        }
-
-        template<typename T>
-        static T choice(T x, T y, T z) {
-            return (x & y) ^ (~x & z);
-        }
-
-        template<typename T>
-        static T majority(T x, T y, T z) {
-            return (x & y) ^ (x & z) ^ (y & z);
-        }
-
-        template<typename T>
-        static T sigma0(T x) {
-            static_assert(false, "Not implemented for this type");
-        }
-
-        template<>
-        static uint32_t sigma0<uint32_t>(uint32_t x) {
-            return rotateRight<uint32_t>(x, 2) 
-            ^ rotateRight<uint32_t>(x, 13)
-            ^ rotateRight<uint32_t>(x, 22);
-        }
-
-        template<>
-        static uint64_t sigma0<uint64_t>(uint64_t x) {
-            return rotateRight<uint64_t>(x, 28)
-                ^ rotateRight<uint64_t>(x, 34)
-                ^ rotateRight<uint64_t>(x, 39);
-        }
-
-        template<typename T>
-        static T sigma1(T x) {
-            static_assert(false, "Not implemented for this type");
-        }
-
-        template<>
-        static uint32_t sigma1<uint32_t>(uint32_t x) {
-            return rotateRight<uint32_t>(x, 6)
-                ^ rotateRight<uint32_t>(x, 11)
-                ^ rotateRight<uint32_t>(x, 25);
-        }
-
-        template<>
-        static uint64_t sigma1<uint64_t>(uint64_t x) {
-            return rotateRight<uint64_t>(x, 14)
-                ^ rotateRight<uint64_t>(x, 18)
-                ^ rotateRight<uint64_t>(x, 41);
-        }
-
-        template<typename T>
-        static T gamma0(T x) {
-            static_assert(false, "Not implemented for this type");
-        }
-
-        template<>
-        static uint32_t gamma0<uint32_t>(uint32_t x) {
-            return rotateRight<uint32_t>(x, 7)
-            ^ rotateRight<uint32_t>(x, 18)
-            ^ (x >> 3);
-        }
-
-        template<>
-        static uint64_t gamma0<uint64_t>(uint64_t x) {
-            return rotateRight<uint64_t>(x, 1)
-                ^ rotateRight<uint64_t>(x, 8)
-                ^ (x >> 7);
-        }
-
-        template<typename T>
-        static T gamma1(T x) {
-            static_assert(false, "Not implemented for this type");
-        }
-
-        template<>
-        static uint32_t gamma1<uint32_t>(uint32_t x) {
-            return rotateRight<uint32_t>(x, 17)
-                ^ rotateRight<uint32_t>(x, 19)
-                ^ (x >> 10);
-        }
-
-        template<>
-        static uint64_t gamma1<uint64_t>(uint64_t x) {
-            return rotateRight<uint64_t>(x, 19)
-                ^ rotateRight<uint64_t>(x, 61)
-                ^ (x >> 6);
-        }
-    }
-
-    template<typename Derived, typename Word, typename BitCounter, 
-    size_t s_roundCount, size_t s_chunkByteCount>
-    class SHA2Base
+    template<typename Derived, typename Word, typename BitCounter,
+        size_t s_roundCount, size_t s_chunkByteCount>
+    class SHA2Base : public MerkleDamgardBase<Derived, Word, BitCounter, s_chunkByteCount, 8>
     {
     protected:
-       std::array<Word, 8> m_state;
-       std::array<uint8_t, s_chunkByteCount> m_buffer;
-       BitCounter m_bitCount;
-       size_t m_bufferLen;
-    public:
-
-       // Constructor
-       SHA2Base() {
-           reset();
-       }
-
-       // Reset to initial state
-       void reset() {
-           // Initial hash values
-           m_state = static_cast<Derived*>(this)->getInitialState();
-           m_buffer.fill(0);
-           m_bitCount = 0;
-           m_bufferLen = 0;
-       }
-
-       void update(std::span<const uint8_t> bytes) {
-
-           // Add to bit count
-           m_bitCount += bytes.size() * 8;
-
-           // Process any leftover bytes in buffer
-           size_t i = 0;
-           if (m_bufferLen > 0) {
-               size_t toCopy = std::min(m_buffer.size() - m_bufferLen, bytes.size());
-               std::memcpy(m_buffer.data() + m_bufferLen, bytes.data(), toCopy);
-               m_bufferLen += toCopy;
-               i += toCopy;
-
-               if (m_bufferLen == m_buffer.size()) {
-                   processChunk(m_buffer);
-                   m_bufferLen = 0;
-               }
-           }
-
-           // Process full blocks directly from input
-           for (; i + m_buffer.size() <= bytes.size(); i += m_buffer.size()) {
-               processChunk(std::span<const uint8_t, m_buffer.size()>(bytes.data() + i, m_buffer.size()));
-           }
-
-           // Store remaining bytes in buffer
-           if (i < bytes.size()) {
-               std::memcpy(m_buffer.data(), bytes.data() + i, bytes.size() - i);
-               m_bufferLen = bytes.size() - i;
-           }
-       }
-
-       void update(std::string_view str) {
-           update(std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(str.data()), str.size()));
-       }
-
-       template <Container C>
-       void update(const C& container) {
-           update(std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(container.data()), container.size() *
-               sizeof(decltype(*container.begin()))));
-       }
-
-       // Get final hash
-       std::array<uint64_t, 8> digest() {
-          // Save state for finalization
-          auto savedState = m_state;
-          auto savedBuffer = m_buffer;
-          auto savedBitCount = m_bitCount;
-          auto savedBufferLen = m_bufferLen;
-
-          // Finalize
-          finalize();
-          
-          auto result = static_cast<Derived*>(this)->formatResult();
-
-          // Restore state (allows continued use)
-          m_state = savedState;
-          m_buffer = savedBuffer;
-          m_bitCount = savedBitCount;
-          m_bufferLen = savedBufferLen;
-
-          return result;
-       }
-
-       // Get hash as hex string
-       std::string hexdigest() {
-           auto digestVal = digest();
-           std::stringstream ss;
-           for (auto word : digestVal) {
-               ss << std::hex << std::setfill('0') << word;
-           }
-           return ss.str();
-       }
-
-       // Initial update (reset and process)
-       void initialUpdate(std::span<const uint8_t> bytes) {
-           reset();
-           // Add to bit count
-           m_bitCount += bytes.size() * 8;
-
-           // Process full blocks directly from input
-           size_t i = 0;
-           for (; i + m_buffer.size() <= bytes.size(); i += m_buffer.size()) {
-               processChunk(std::span<const uint8_t, m_buffer.size()>(bytes.data() + i, m_buffer.size()));
-           }
-
-           // Store remaining bytes in buffer
-           if (i < bytes.size()) {
-               std::memcpy(m_buffer.data(), bytes.data() + i, bytes.size() - i);
-               m_bufferLen = bytes.size() - i;
-           }
-       }
-
-       static std::string hash(const std::string& input) {
-           Derived sha;
-           sha.initialUpdate(std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(input.data()), input.size()));
-           return sha.hexdigest();
-       }
-
-    protected:
-
-        template<size_t ByteIndex, size_t TotalBytes = sizeof(Word)>
-        inline constexpr Word extractByteAndShift(const uint8_t* chunk) {
-            if constexpr (ByteIndex < TotalBytes) {
-                constexpr size_t shiftAmount = 8 * (TotalBytes - ByteIndex - 1);
-                return (static_cast<Word>(chunk[ByteIndex]) << shiftAmount) |
-                    extractByteAndShift<ByteIndex + 1, TotalBytes>(chunk);
-            }
-            return 0;
-        }
-
-        inline constexpr Word extractWord(const uint8_t* chunk) {
-            return extractByteAndShift<0>(chunk);
-        }
 
         void processChunk(std::span<const uint8_t, s_chunkByteCount> chunk) {
             // Prepare message schedule W[0..63]
-            std::array<uint64_t, s_roundCount> W;
+            std::array<Word, s_roundCount> W;
 
             // First 16 words from the chunk (big-endian)
             for (int i = 0; i < 16; ++i) {
-                W[i] = extractWord(chunk.data() + i * 8);
+                W[i] = Detail::extractByteAndShiftBigEndian<Word, 0>(chunk.data() + i * sizeof(Word));
             }
 
             // Remaining words
@@ -261,14 +25,14 @@ namespace Cryptography {
             }
 
             // Initialize working variables
-            Word a = m_state[0];
-            Word b = m_state[1];
-            Word c = m_state[2];
-            Word d = m_state[3];
-            Word e = m_state[4];
-            Word f = m_state[5];
-            Word g = m_state[6];
-            Word h = m_state[7];
+            Word a = this->m_state[0];
+            Word b = this->m_state[1];
+            Word c = this->m_state[2];
+            Word d = this->m_state[3];
+            Word e = this->m_state[4];
+            Word f = this->m_state[5];
+            Word g = this->m_state[6];
+            Word h = this->m_state[7];
 
             auto K = static_cast<Derived*>(this)->getRoundConstants();
 
@@ -288,40 +52,25 @@ namespace Cryptography {
             }
 
             // Update hash values
-            m_state[0] += a;
-            m_state[1] += b;
-            m_state[2] += c;
-            m_state[3] += d;
-            m_state[4] += e;
-            m_state[5] += f;
-            m_state[6] += g;
-            m_state[7] += h;
+            this->m_state[0] += a;
+            this->m_state[1] += b;
+            this->m_state[2] += c;
+            this->m_state[3] += d;
+            this->m_state[4] += e;
+            this->m_state[5] += f;
+            this->m_state[6] += g;
+            this->m_state[7] += h;
         }
 
-        void finalize() {
-           // Append '1' bit
-           m_buffer[m_bufferLen++] = 0x80;
-
-           // If no room for length, process this block
-           if (m_bufferLen > s_chunkByteCount - sizeof(BitCounter)) {
-               for (; m_bufferLen < s_chunkByteCount; ++m_bufferLen)
-                   m_buffer[m_bufferLen] = 0;
-               processChunk(m_buffer);
-               m_bufferLen = 0;
-           }
-
-           // Pad with zeros
-           for (; m_bufferLen < s_chunkByteCount - sizeof(BitCounter); ++m_bufferLen)
-               m_buffer[m_bufferLen] = 0;
-
-           static_cast<Derived*>(this)->appendLength();
-
-           // Process final block
-           processChunk(m_buffer);
-        }
+    public:
+        using B = MerkleDamgardBase<Derived, Word, BitCounter, s_chunkByteCount, 8>;
+        using B::B;
+        friend class B;
+        friend class Base<Derived, Word, BitCounter, s_chunkByteCount, 8>;
+        friend class MerkleDamgardBase<Derived, Word, BitCounter, s_chunkByteCount, 8>;
     };
 
-    class SHA512 : public SHA2Base<SHA512, uint64_t, uint128_t, 80, 128> 
+    class SHA2_512 : public SHA2Base<SHA2_512, uint64_t, Detail::uint128_t, 80, 128>
     {
     protected:
         // Initial hash values (first 64 bits of fractional parts of square roots of first 8 primes)
@@ -367,21 +116,24 @@ namespace Cryptography {
         inline void appendLength() {
             // Append length (big-endian, 128-bit)
             for (int i = 0; i < 8; ++i) {
-               m_buffer[m_bufferLen++] = (m_bitCount.high() >> (56 - i * 8)) & 0xFF;
+                m_buffer[m_bufferLen++] = (m_bitCount.high() >> (56 - i * 8)) & 0xFF;
             }
 
             // Store low 64 bits of length
             for (int i = 0; i < 8; ++i) {
-               m_buffer[m_bufferLen++] = (m_bitCount.low() >> (56 - i * 8)) & 0xFF;
+                m_buffer[m_bufferLen++] = (m_bitCount.low() >> (56 - i * 8)) & 0xFF;
             }
         }
     public:
-        using Base = SHA2Base<SHA512, uint64_t, uint128_t, 80, 128>;
-        using Base::Base;
-        friend class Base;
+
+        using B = SHA2Base<SHA2_512, uint64_t, Detail::uint128_t, 80, 128>;
+        using B::B;
+        friend class B;
+        friend class Base<SHA2_512, uint64_t, Detail::uint128_t, 128, 8>;
+        friend class MerkleDamgardBase<SHA2_512, uint64_t, Detail::uint128_t, 128, 8>;
     };
 
-    class SHA384 : public SHA2Base<SHA384, uint64_t, uint128_t, 80, 128>
+    class SHA2_384 : public SHA2Base<SHA2_384, uint64_t, Detail::uint128_t, 80, 128>
     {
     protected:
         // Initial hash values (first 64 bits of fractional parts of square roots of first 8 primes)
@@ -443,12 +195,15 @@ namespace Cryptography {
             }
         }
     public:
-        using Base = SHA2Base<SHA384, uint64_t, uint128_t, 80, 128>;
-        using Base::Base;
-        friend class Base;
+
+        using B = SHA2Base<SHA2_384, uint64_t, Detail::uint128_t, 80, 128>;
+        using B::B;
+        friend class B;
+        friend class Base<SHA2_384, uint64_t, Detail::uint128_t, 128, 8>;
+        friend class MerkleDamgardBase<SHA2_384, uint64_t, Detail::uint128_t, 128, 8>;
     };
 
-    class SHA256 : public SHA2Base<SHA256, uint32_t, uint64_t, 64, 64>
+    class SHA2_256 : public SHA2Base<SHA2_256, uint32_t, uint64_t, 64, 64>
     {
     protected:
         // Initial hash values (first 32 bits of fractional parts of square roots of first 8 primes)
@@ -486,13 +241,16 @@ namespace Cryptography {
                 m_buffer[m_bufferLen++] = (m_bitCount >> (56 - i * 8)) & 0xFF;
             }
         }
+
     public:
-        using Base = SHA2Base<SHA256, uint32_t, uint64_t, 64, 64>;
-        using Base::Base;
-        friend class Base;
+        using B = SHA2Base<SHA2_256, uint32_t, uint64_t, 64, 64>;
+        using B::B;
+        friend class B;
+        friend class Base<SHA2_256, uint32_t, uint64_t, 64, 8>;
+        friend class MerkleDamgardBase<SHA2_256, uint32_t, uint64_t, 64, 8>;
     };
 
-    class SHA224 : public SHA2Base<SHA224, uint32_t, uint64_t, 64, 64>
+    class SHA2_224 : public SHA2Base<SHA2_224, uint32_t, uint64_t, 64, 64>
     {
     protected:
         // Initial hash values (first 32 bits of fractional parts of square roots of first 8 primes)
@@ -539,9 +297,10 @@ namespace Cryptography {
             }
         }
     public:
-        using Base = SHA2Base<SHA224, uint32_t, uint64_t, 64, 64>;
-        using Base::Base;
-        friend class Base;
+        using B = SHA2Base<SHA2_224, uint32_t, uint64_t, 64, 64>;
+        using B::B;
+        friend class B;
+        friend class Base<SHA2_224, uint32_t, uint64_t, 64, 8>;
+        friend class MerkleDamgardBase<SHA2_224, uint32_t, uint64_t, 64, 8>;
     };
-
 }

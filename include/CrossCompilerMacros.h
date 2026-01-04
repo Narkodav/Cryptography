@@ -1,6 +1,8 @@
 #pragma once
 #include <stdint.h>
 
+namespace Cryptography::Detail {
+
 // Check for compiler-specific intrinsics
 #if defined(__GNUC__) || defined(__clang__)
 #define __CRYPTOGRAPHY_PORTABLE_BSWAP32__(x) __builtin_bswap32(x)
@@ -77,6 +79,7 @@ public:
 };
 
 #elif defined(_MSC_VER)
+#include <intrin.h>
 class uint128_t {
 private:
     uint64_t m_low;
@@ -135,20 +138,20 @@ public:
     }
 
     uint128_t& operator+=(const uint64_t& other) {
-        uint64_t old_lo = lo;
-        lo += value;
-        if (lo < old_lo) { // Carry occurred
-            hi++;
+        uint64_t old_lo = m_low;
+        m_low += other;
+        if (m_low < old_lo) { // Carry occurred
+            m_high++;
         }
         return *this;
     }
 
     uint128_t& operator+=(const uint128_t& other) {
-        uint64_t old_lo = lo;
-        lo += other.lo;
-        hi += other.hi;
-        if (lo < old_lo) { // Carry from m_low to m_high
-            hi++;
+        uint64_t old_lo = m_low;
+        m_low += other.m_low;
+        m_high += other.m_high;
+        if (m_low < old_lo) { // Carry from m_low to m_high
+            m_high++;
         }
         return *this;
     }
@@ -196,3 +199,5 @@ namespace
 #define __CTZ32__(x) CTZ32_FUNC(x)
 #define __CTZ16__(x) CTZ16_FUNC(x)
 #endif
+
+};

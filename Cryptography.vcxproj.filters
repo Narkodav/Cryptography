@@ -20,13 +20,31 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Concepts.h">
+    <ClInclude Include="include\Concepts.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="CrossCompilerMacros.h">
+    <ClInclude Include="include\CrossCompilerMacros.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Hashing\SHA2Base.h">
+    <ClInclude Include="include\Hashing\Utility.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Hashing\Base.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Hashing\MD5.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Hashing\SHA2.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Hashing\SHA1.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Hashing\SHA3.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Hashing\StreamHash.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
